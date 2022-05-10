@@ -60,9 +60,8 @@ find_package(Threads)
 link_libraries(
     ${CMAKE_THREAD_LIBS_INIT}
     dl
-    config++
-    panel
 )
+
 
 add_subdirectory(lib)
 include_directories(lib)
