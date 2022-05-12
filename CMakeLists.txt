@@ -50,6 +50,8 @@ message("- Checking : OpenCV")
 find_package( OpenCV REQUIRED )
 include_directories(${OpenCV_INCLUDE_DIRS})
 
+message(${OpenCV_INCLUDE_DIRS})
+
 message("- Checking : Thread")
 find_package(Threads)
 
