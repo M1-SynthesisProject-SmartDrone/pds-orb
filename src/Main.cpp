@@ -51,11 +51,11 @@ vector<Point> myFast(Mat &img, int N = 9, float threshold = 0.15, int nms_window
         for (int y = 3; y < img.cols - 3; y++)
         {
             auto intensity_pixel = ptr_img[y];
-            /*if (threshold < 1)
+            if (threshold < 1)
             {
                 threshold = threshold * intensity_pixel;
             }
-            */
+            
             int darker_cpt = 0;
             int brighter_cpt = 0;
             // Vérification des pixels 1,5,9,13
@@ -83,7 +83,7 @@ vector<Point> myFast(Mat &img, int N = 9, float threshold = 0.15, int nms_window
                 {
                     const uchar *ptr_img_circle = img.ptr<uchar>(x + circle_idx.at<int>(0, pos_circle));
 
-                    if (ptr_img_circle[y + circle_idx.at<int>(1, pos_circle)] > (intensity_pixel + threshold))
+                    if (ptr_img_circle[y + circle_idx.at<int>(1, pos_circle)] >= (intensity_pixel + threshold))
                     {
                         darker_cpt++;
                     }
@@ -91,7 +91,7 @@ vector<Point> myFast(Mat &img, int N = 9, float threshold = 0.15, int nms_window
                     {
                         darker_cpt = 0;
                     }
-                    if (ptr_img_circle[y + circle_idx.at<int>(1, pos_circle)] < (intensity_pixel - threshold))
+                    if (ptr_img_circle[y + circle_idx.at<int>(1, pos_circle)] <= (intensity_pixel - threshold))
                     {
                         brighter_cpt++;
                     }
@@ -114,13 +114,52 @@ vector<Point> myFast(Mat &img, int N = 9, float threshold = 0.15, int nms_window
                     int nbIterCircle = circle_idx.cols / 2;
                     for (int j = 0; j < nbIterCircle; j++)
                     {
-                        corner_img.at<int>(x, y) += abs(intensity_pixel - img.at<uchar>(x + circle_idx.at<int>(0, j), y + circle_idx.at<int>(1, j)));
+                        corner_img.at<uchar>(x, y) += abs(intensity_pixel - img.at<uchar>(x + circle_idx.at<int>(0, j), y + circle_idx.at<int>(1, j)));
                     }
                 }
             }
         }
     }
-    return keypoints;
+
+    // Phase NMS - Non Maximal Suppresion -- A DEBUGGER 
+    vector<Point> fewer_kps;
+    if (nms_window != 0)
+    {
+        for (Point &point : keypoints)
+        {
+            int initValueX = point.x - nms_window;
+            int finalValueX = point.x + nms_window + 1;
+            int initValueY = point.y - nms_window;
+            int finalValueY = point.y + nms_window + 1;
+            // Dans le pire des cas, tous les pixels sont des points d'interets
+            Mat window = Mat::zeros(Size(2 * nms_window, 2 * nms_window), CV_8UC1);
+            for (int i = initValueX; i < finalValueX; i++)
+            {
+                const uchar *ptr_corner = corner_img.ptr<uchar>(i);
+                for (int j = initValueY; j < finalValueY; j++)
+                {
+                    window.at<uchar>(i, j) = ptr_corner[j];
+                }
+            }
+            double min, max;
+            Point minLoc, maxLoc;
+            minMaxLoc(window, &min, &max, &minLoc, &maxLoc);
+            // Attention les index renvoyés dans minLoc et maxLoc sont inversés par rapport aux index de la matrice de base
+            auto x_new = point.x + maxLoc.y - nms_window;
+            auto y_new = point.y + maxLoc.x - nms_window;
+            Point new_kp = Point(x_new, y_new);
+            auto it = find(fewer_kps.begin(), fewer_kps.end(), new_kp);
+            if (it == fewer_kps.end())
+            {
+                fewer_kps.push_back(new_kp);
+            }
+        }
+    }
+    else
+    {
+        fewer_kps = keypoints;
+    }
+    return fewer_kps;
 }
 
 int main(int argc, char *argv[])
@@ -129,12 +168,13 @@ int main(int argc, char *argv[])
     LOG_F(INFO, "Start orb test application");
 
     LOG_F(INFO, "Create image");
-    auto img = createImgStraightLines();
+    //auto img = createImgStraightLines();
+    Mat img = imread("ref1.png", IMREAD_COLOR);
 
     LOG_F(WARNING, "Display image on screen");
-    // imshow("The best window ever", img);
-    // waitKey(0);
-
+    imshow("The best window ever", img);
+    waitKey(0);
+    
     LOG_F(INFO, "End of the orb test application");
     std::cout << "Bonjour tout le monde !.\n";
 
@@ -146,14 +186,26 @@ int main(int argc, char *argv[])
     imshow("The best window ever", grayscale);
     waitKey(0);
 
-    vector<Point> KeyPoint = myFast(grayscale, 12, 10, 2);
+    // TEST FCT MINMAXLOC
+    /*
+    Mat cross_idx = (Mat_<int>(2, 4) << 5, 0, -3, 0, 6, 3, 0, -3);
+    cout << cross_idx << "\n";
+    cout << cross_idx.at<int>(0,1) << "\n";
+    double min, max;
+    Point minLoc, maxLoc;
+    minMaxLoc(cross_idx, &min, &max, &minLoc, &maxLoc);
+    cout << "min" << min << "max : " << max << "minloc :" << minLoc << " maxloc :" << maxLoc;
+    */
+
+    vector<Point> KeyPoint = myFast(grayscale, 12);
 
     LOG_F(INFO, "fini myfast \n");
     cout << KeyPoint;
 
     for (Point &point : KeyPoint)
     {
-        img.at<Vec3b>(point) = color;
+        circle(img,point,3,color);
+        //img.at<Vec3b>(point) = color;
     }
     imshow("The best window ever", img);
     waitKey(0);
