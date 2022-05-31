@@ -3,12 +3,16 @@
 #include <opencv2/opencv.hpp>
 #include <iostream>
 #include <vector>
+#include<sys/time.h>
 
 using namespace cv;
 using namespace std;
 
 const int WIDTH = 640;
 const int HEIGHT = 480;
+const int MAX_FEATURES = 500;
+const float GOOD_MATCH_PERCENT = 0.15f;
+const int DISTANCE_MAX = 50;
 
 // Convert RGB image to grayscale using the luminosity method
 void RGBtoGrayScale(Mat rgb, Mat *grayscale)
@@ -55,7 +59,7 @@ vector<Point> myFast(Mat &img, int N = 9, float threshold = 0.15, int nms_window
             {
                 threshold = threshold * intensity_pixel;
             }
-            
+
             int darker_cpt = 0;
             int brighter_cpt = 0;
             // Vérification des pixels 1,5,9,13
@@ -121,7 +125,7 @@ vector<Point> myFast(Mat &img, int N = 9, float threshold = 0.15, int nms_window
         }
     }
 
-    // Phase NMS - Non Maximal Suppresion -- A DEBUGGER 
+    // Phase NMS - Non Maximal Suppresion -- A DEBUGGER
     vector<Point> fewer_kps;
     if (nms_window != 0)
     {
@@ -162,19 +166,77 @@ vector<Point> myFast(Mat &img, int N = 9, float threshold = 0.15, int nms_window
     return fewer_kps;
 }
 
+float myOrb(Mat img1,Mat img2)
+{
+    //Conversion des images couleurs en nuances de gris
+    Mat img1Gray, img2Gray;
+    cvtColor(img1, img1Gray, COLOR_BGR2GRAY);
+    cvtColor(img2, img2Gray, COLOR_BGR2GRAY);
+
+    // Variables permettant de stocker les points clefs et descripteurs
+    vector<KeyPoint> keypoints1, keypoints2;
+    Mat descriptors1, descriptors2;
+
+    // Initialisation de ORB
+    Ptr<Feature2D> orb = ORB::create(MAX_FEATURES);
+
+    // Détection des features
+    orb->detectAndCompute(img1Gray, Mat(), keypoints1, descriptors1);
+    orb->detectAndCompute(img2Gray, Mat(), keypoints2, descriptors2);
+
+    // Correspondance des features
+    vector<DMatch> matches;
+    Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("BruteForce-Hamming");
+    matcher->match(descriptors1, descriptors2, matches, Mat());
+
+    // Trier les correspondances selon le score
+    sort(matches.begin(), matches.end());
+
+    // Draw top matches : Non nécessaire
+    /*
+    Mat imMatches;
+    drawMatches(img1, keypoints1, img2, keypoints2, matches, imMatches);
+    imwrite("matches.jpg", imMatches);
+    */
+
+    // Calcule du nombre de points clefs qui ont une distance < DISTANCE_MAX
+    vector<DMatch> good_matches;
+    for (size_t i = 0; i < matches.size(); i++)
+    {
+        if(matches[i].distance<DISTANCE_MAX)
+        {
+            good_matches.push_back(matches[i]);
+        }
+    }
+    float similarity=0;
+    if(good_matches.size()>0)
+    {
+        similarity=good_matches.size()/matches.size();
+    }
+    
+    return similarity;
+}
+
+// Fonction qui calcule l'orientatin des coins
+// Utilisation de l'intensité du centre comme méthode
+// vector<double> calculate_corner_orientation(Mat img,vector <double> corners)
+
+// BRIEF
+
 int main(int argc, char *argv[])
 {
+    /*
     loguru::init(argc, argv);
     LOG_F(INFO, "Start orb test application");
 
     LOG_F(INFO, "Create image");
-    //auto img = createImgStraightLines();
-    Mat img = imread("ref1.png", IMREAD_COLOR);
+    // auto img = createImgStraightLines();
 
+    
     LOG_F(WARNING, "Display image on screen");
     imshow("The best window ever", img);
     waitKey(0);
-    
+
     LOG_F(INFO, "End of the orb test application");
     std::cout << "Bonjour tout le monde !.\n";
 
@@ -196,19 +258,35 @@ int main(int argc, char *argv[])
     minMaxLoc(cross_idx, &min, &max, &minLoc, &maxLoc);
     cout << "min" << min << "max : " << max << "minloc :" << minLoc << " maxloc :" << maxLoc;
     */
+    /*
+     vector<Point> keyPoint = myFast(grayscale, 12);
 
-    vector<Point> KeyPoint = myFast(grayscale, 12);
+     LOG_F(INFO, "fini myfast \n");
+     cout << keyPoint;
 
-    LOG_F(INFO, "fini myfast \n");
-    cout << KeyPoint;
+     for (Point &point : keyPoint)
+     {
+         circle(img,point,3,color);
+         //img.at<Vec3b>(point) = color;
+     }
+     imshow("The best window ever", img);
+     waitKey(0);
+     */
 
-    for (Point &point : KeyPoint)
-    {
-        circle(img,point,3,color);
-        //img.at<Vec3b>(point) = color;
-    }
-    imshow("The best window ever", img);
-    waitKey(0);
+    //---------------Exemple ORB---------------------
+
+    Mat img1 = imread("ref2.png", IMREAD_COLOR);
+    Mat img2 = imread("ref2.png", IMREAD_COLOR);
+    timeval start2, end2;
+    //Calcul du temps d'exécution
+    auto start=chrono::high_resolution_clock::now();
+    float similarity= myOrb(img1,img2);
+    auto end = chrono::high_resolution_clock::now();
+
+    cout<<"\nSimilarité  :  "<<similarity <<"\n";
+    auto int_s = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    std::cout << "temps exécution orb : " << int_s.count() << " milliseconds )" << std::endl;
 
     return 0;
 }
